@@ -741,257 +741,159 @@ def distillresnet(teacherdataargs, studentdataargs, directdataargs,teacherargs, 
     return teacher_executiontime, execution_time_d, teacher_val_scores, student_val_scores, teacher_best_acc, best_test_acc,add_val_scores,add_acc,similarity_list_distill,endtime - starttime, direct_val_scores, distill_test_best_acc, old_val_scores, old_acc, similarity_list_direct,f_best_acc
 
 
-def train_with_fisher(teacherdataargs, studentdataargs, directdataargs,teacherargs, studentargs, directargs,de,temperature, alpha, alpha_decay,
-                  teacher_need_train):
-    device = de
-    teacher_val_scores = []
-    student_val_scores = []
-    add_val_scores = []
-    similarity_list_distill = []
-    direct_val_scores = []
-    old_val_scores = []
-    similarity_list_direct = []
-    dataset_dir = lib.get_path(teacherdataargs['data']['path'])
-    teacherdataset = TabularDataset(teacherdataargs, dataset_dir)
-    studentdataset = TabularDataset(studentdataargs, dataset_dir)
-    directdataset = TabularDataset(directdataargs, dataset_dir)
-    #################################ADDdataset
-    #################################ADDdataset
-    adddataset = copy.deepcopy(studentdataset)
-
-    remove_col = teacherdataset.re_col
-    for k in adddataset.X[0]:
-        column = adddataset.X[0][k][:, remove_col]  # 获取要替换的列
-        mean_value = torch.mean(column)  # 计算列的平均值
-        adddataset.X[0][k][:, remove_col] = mean_value  # 将列的所有值替换为平均值
-    ###################################
-
-    combined_dataset = CombinedDataset(teacherdataset, studentdataset)
-    teachermodel = ResNet(
-        d_numerical=0 if teacherdataset.X[0]['train'] is None else teacherdataset.X[0]['train'].shape[1],
-        categories=lib.get_categories(teacherdataset.X[1]),
-        d_out=teacherdataset.D.info['n_classes'] if teacherdataset.D.is_multiclass else 1,
-        **teacherargs['model'],
-    ).to(device)
-
-    studentmodel = ResNet(
-        d_numerical=0 if studentdataset.X[0]['train'] is None else studentdataset.X[0]['train'].shape[1],
-        categories=lib.get_categories(studentdataset.X[1]),
-        d_out=studentdataset.D.info['n_classes'] if studentdataset.D.is_multiclass else 1,
-        **studentargs['model'],
-    ).to(device)
-
-    if teacher_need_train == 1:
-        teacher_executiontime, teacher_val_scores, teacher_best_acc = model_train(teachermodel, teacherdataset,
-                                                                                  teacherargs, device)
-        model_load(teachermodel)
-    else:
-        model_load(teachermodel)
-
-    teachermodel.eval()
-    fisher_dict = {}
-    for name, param in teachermodel.named_parameters():
-        fisher_dict[name] = torch.zeros_like(param.data)
-
-    # Calculate Fisher Information for each parameter
-    dataloader = DataLoader(teacherdataset, batch_size=teacherargs['training']['batch_size'], shuffle=True,
-                             collate_fn=collate_none_fn)
 
 
-    for data in dataloader:
-        for name, param in teachermodel.named_parameters():
-            fisher_dict[name] += param.grad.data.pow(2) * len(data)
-    for name in fisher_dict:
-        fisher_dict[name] = fisher_dict[name] / len(dataloader.dataset)
 
-    trainloader = DataLoader(combined_dataset, batch_size=teacherargs['training']['batch_size'], shuffle=True,
-                             collate_fn=collate_none_fn)
-    studentoptimizer = lib.make_optimizer(
-        studentargs['training']['optimizer'],
-        studentmodel.parameters(),
-        studentargs['training']['lr'],
-        studentargs['training']['weight_decay'],
-    )
-    # 训练循环
 
-    studentmodel.train()
-    best_acc = float('-inf')
-    best_test_acc = float('-inf')
-    add_acc = float('-inf')
-    patience = studentargs['training']['patience']
-    early_stopping_counter = 0
 
-    starttime = time.time()
 
-    for epoch in range(studentargs['training']['n_epochs']):
-        alpha = alpha * alpha_decay
-        for x_num_t, x_cat_t, _, x_num, x_cat, y in trainloader:
-            x_num = x_num.to(device)
-            x_cat = None if x_cat is None else x_cat.to(device)
-            x_num_t = x_num_t.to(device)
-            x_cat_t = None if x_cat_t is None else x_cat_t.to(device)
-            y = y.view(-1).to(device)
-            # print(x_num_t.dtype, x_cat_t, _, x_num.dtype, x_cat, y.dtype)
 
-            # 清除梯度
-            studentoptimizer.zero_grad()
 
-            # 前向传播
-            teacher_output, teacher_lasthidden_output = teachermodel(x_num_t, x_cat_t)
-            student_output, student_lasthidden_output = studentmodel(x_num, x_cat)
+# def directresnet(teacherdataargs, directdataargs, teacherargs, directargs, de):
+#     device = de
+#     direct_val_scores = []
+#     old_val_scores=[]
+#     similarity_list=[]
+#     dataset_dir = lib.get_path(teacherdataargs['data']['path'])
+#     teacherdataset = TabularDataset(teacherdataargs, dataset_dir)
+#     directdataset = TabularDataset(directdataargs, dataset_dir)
+# #################################ADDdataset
+#     olddataset = copy.deepcopy(directdataset)
+#
+#     remove_col = teacherdataset.re_col
+#     for k in olddataset.X[0]:
+#         column = olddataset.X[0][k][:, remove_col]  # 获取要替换的列
+#         mean_value = torch.mean(column)  # 计算列的平均值
+#         olddataset.X[0][k][:, remove_col] = mean_value  # 将列的所有值替换为平均值
+#    ###################################
+#
+#
+#
+#     combined_dataset = CombinedDataset(teacherdataset, directdataset)
+#     teachermodel = ResNet(
+#         d_numerical=0 if teacherdataset.X[0]['train'] is None else teacherdataset.X[0]['train'].shape[1],
+#         categories=lib.get_categories(teacherdataset.X[1]),
+#         d_out=teacherdataset.D.info['n_classes'] if teacherdataset.D.is_multiclass else 1,
+#         **teacherargs['model'],
+#     ).to(device)
+#
+#     directmodel = ResNet(
+#         d_numerical=0 if directdataset.X[0]['train'] is None else directdataset.X[0]['train'].shape[1],
+#         categories=lib.get_categories(directdataset.X[1]),
+#         d_out=directdataset.D.info['n_classes'] if directdataset.D.is_multiclass else 1,
+#         **directargs['model'],
+#     ).to(device)
+#
+#     model_load(teachermodel)
+#
+#     #############
+#
+#     directmodel.train()
+#     best_acc = float('-inf')
+#     old_acc=float('-inf')
+#     patience = directargs['training']['patience']
+#     early_stopping_counter = 0
+#
+#     directoptimizer = lib.make_optimizer(
+#         directargs['training']['optimizer'],
+#         directmodel.parameters(),
+#         directargs['training']['lr'],
+#         directargs['training']['weight_decay'],
+#     )
+#     # 训练循环
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#     directmodel.train()
+#     trainloader = DataLoader(combined_dataset, batch_size=teacherargs['training']['batch_size'], shuffle=True,
+#                              collate_fn=collate_none_fn)
+#     starttime = time.time()
+#
+#     for epoch in range(directargs['training']['n_epochs']):
+#         for x_num_t, x_cat_t, _, x_num, x_cat, y in trainloader:
+#             x_num = x_num.to(device)
+#             x_cat = None if x_cat is None else x_cat.to(device)
+#             x_num_t = x_num_t.to(device)
+#             x_cat_t = None if x_cat_t is None else x_cat_t.to(device)
+#             y = y.view(-1).to(device)
+#
+#             # 清除梯度
+#             directoptimizer.zero_grad()
+#
+#             # 前向传播
+#             student_output,student_lasthidden_output = directmodel(x_num, x_cat)
+#             teacher_output,teacher_lasthidden_output = teachermodel(x_num_t, x_cat_t)
+#
+#             # 计算蒸馏损失
+#
+#             #计算相似度
+#
+#             # distillation_loss_value = nn.CrossEntropyLoss(student_output, torch.argmax(teacher_output, dim=1))
+#             # 计算总损失
+#             loss = loss_fn(directdataset,student_output, y)
+#
+#             # loss = loss_fn(student_output, y)
+#             # 反向传播和优化
+#             loss.backward()
+#             directoptimizer.step()
+#
+#         # 打印每个epoch的损失
+#         print(f"Epoch {epoch + 1}/{directargs['training']['n_epochs']}, Loss: {loss.item()}")
+#         similarity = compute_similarity(student_lasthidden_output, teacher_lasthidden_output)
+#         similarity_list.append(similarity)
+#         metrics, predictions = evaluate(directmodel, directdataset, directargs, [lib.VAL, lib.TEST], device)
+#         directmodel.train()
+#         # 保存val准确率
+#         #student_val_score = metrics['val']['score']
+#         direct_val_scores.append(metrics)
+#
+# #############old
+#         metrics_old, predictions_old = evaluate(directmodel, olddataset, directargs, [lib.VAL, lib.TEST], device)
+# ###################
+#         old_val_scores.append(metrics_old)
+#
+#
+#         # 早停判断
+#         if metrics['val']['score'] > best_acc:
+#             best_acc = metrics['val']['score']
+#             old_acc=metrics_old['val']['score']
+#             early_stopping_counter = 0
+#             # 保存最优模型
+#             print('Saving model')
+#             endtime = time.time()
+#             torch.save(directmodel.state_dict(), 'best_direct_model.pth')
+#         else:
+#             early_stopping_counter += 1
+#             if early_stopping_counter >= patience:
+#                 print("Early stopping triggered.")
+#                 # 绘制准确率曲线
+#
+#                 return endtime - starttime,direct_val_scores,best_acc,old_val_scores,old_acc,similarity_list
+#
+#     return  endtime - starttime, direct_val_scores, best_acc,old_val_scores,old_acc,similarity_list
 
-            fisher_loss = 0
-            for name, param in studentmodel.named_parameters():
-                if name.startswith('first_layer_weight'):
-                    fisher_loss += (fisher_dict[name] * (param - studentmodel[name].to(device)).pow(2)).sum()
-            # 计算蒸馏损失
 
-            # print(distillation_loss_value,(1 - alpha) * loss_fn(studentdataset,student_output, y))
-            # 计算相似度
-            # distillation_loss_value = nn.CrossEntropyLoss(student_output, torch.argmax(teacher_output, dim=1))
-            # 计算总损失
-            loss = alpha * fisher_loss + (1 - alpha) * loss_fn(studentdataset, student_output, y)
-
-            # loss = loss_fn(student_output, y)
-            # 反向传播和优化
-            loss.backward()
-            studentoptimizer.step()
-
-        # 打印每个epoch的损失
-        print(f"Epoch {epoch + 1}/{studentargs['training']['n_epochs']}, Loss: {loss.item()}")
-        similarity = compute_similarity(student_lasthidden_output, teacher_lasthidden_output)
-        similarity_list_distill.append(similarity)
-
-        metrics, predictions = evaluate(studentmodel, studentdataset, studentargs, [lib.VAL, lib.TEST], device)
-        if epoch + 1 == 5:
-            f_best_acc = metrics['test']['score']
-        studentmodel.train()
-        # 保存val准确率
-        # student_val_score = metrics['val']['score']
-        student_val_scores.append(metrics)
-
-        #############add
-        metrics_add, predictions_add = evaluate(studentmodel, adddataset, studentargs, [lib.VAL, lib.TEST], device)
-        ###################
-        studentmodel.train()
-        add_val_scores.append(metrics_add)
-
-        # 早停判断
-        if metrics['val']['score'] > best_acc:
-            best_acc = metrics['val']['score']
-            best_test_acc = metrics['test']['score']
-            add_acc = metrics_add['test']['score']
-            early_stopping_counter = 0
-            # 保存最优模型
-            print('Saving model')
-            endtime = time.time()
-            torch.save(studentmodel.state_dict(), 'best_student_model.pth')
-        else:
-            early_stopping_counter += 1
-            if early_stopping_counter >= patience:
-                print("Early stopping triggered.")
-                # 绘制准确率曲线
-                execution_time_d = endtime - starttime
-                break
-
-    ########直接训练
-
-    combined_dataset_d = CombinedDataset(teacherdataset, directdataset)
-    directmodel = ResNet(
-        d_numerical=0 if directdataset.X[0]['train'] is None else directdataset.X[0]['train'].shape[1],
-        categories=lib.get_categories(directdataset.X[1]),
-        d_out=directdataset.D.info['n_classes'] if directdataset.D.is_multiclass else 1,
-        **directargs['model'],
-    ).to(device)
-    model_load(teachermodel)
-    teachermodel.eval()
-    trainloader = DataLoader(combined_dataset_d, batch_size=teacherargs['training']['batch_size'], shuffle=True,
-                             collate_fn=collate_none_fn)
-
-    directoptimizer = lib.make_optimizer(
-        directargs['training']['optimizer'],
-        directmodel.parameters(),
-        directargs['training']['lr'],
-        directargs['training']['weight_decay'],
-    )
-
-    #############
-    directmodel.train()
-    distill_best_acc = float('-inf')
-    distill_test_best_acc = float('-inf')
-    old_acc = float('-inf')
-    patience = directargs['training']['patience']
-    early_stopping_counter = 0
-
-    # 训练循环
-
-    starttime = time.time()
-
-    for epoch in range(directargs['training']['n_epochs']):
-        for x_num_t, x_cat_t, _, x_num, x_cat, y in trainloader:
-            x_num = x_num.to(device)
-            x_cat = None if x_cat is None else x_cat.to(device)
-            x_num_t = x_num_t.to(device)
-            x_cat_t = None if x_cat_t is None else x_cat_t.to(device)
-            y = y.view(-1).to(device)
-
-            # 清除梯度
-            directoptimizer.zero_grad()
-
-            # 前向传播
-            teacher_output, teacher_lasthidden_output = teachermodel(x_num_t, x_cat_t)
-            student_output, student_lasthidden_output = directmodel(x_num, x_cat)
-
-            # 计算蒸馏损失
-
-            # 计算相似度
-
-            # distillation_loss_value = nn.CrossEntropyLoss(student_output, torch.argmax(teacher_output, dim=1))
-            # 计算总损失
-            loss = loss_fn(directdataset, student_output, y)
-
-            # loss = loss_fn(student_output, y)
-            # 反向传播和优化
-            loss.backward()
-            directoptimizer.step()
-
-        # 打印每个epoch的损失
-        print(f"Epoch {epoch + 1}/{directargs['training']['n_epochs']}, Loss: {loss.item()}")
-        similarity = compute_similarity(student_lasthidden_output, teacher_lasthidden_output)
-        similarity_list_direct.append(similarity)
-        metrics, predictions = evaluate(directmodel, directdataset, directargs, [lib.VAL, lib.TEST], device)
-        directmodel.train()
-        # 保存val准确率
-        # student_val_score = metrics['val']['score']
-        direct_val_scores.append(metrics)
-
-        #############old
-        metrics_old, predictions_old = evaluate(directmodel, adddataset, directargs, [lib.VAL, lib.TEST], device)
-        ###################
-        directmodel.train()
-        old_val_scores.append(metrics_old)
-
-        # 早停判断
-        if metrics['val']['score'] > distill_best_acc:
-            distill_best_acc = metrics['val']['score']
-            distill_test_best_acc = metrics['test']['score']
-            old_acc = metrics_old['test']['score']
-            early_stopping_counter = 0
-            # 保存最优模型
-            print('Saving model')
-            endtime = time.time()
-            torch.save(directmodel.state_dict(), 'best_direct_model.pth')
-        else:
-            early_stopping_counter += 1
-            if early_stopping_counter >= patience:
-                print("Early stopping triggered.")
-                # 绘制准确率曲线
-
-                break
-    execution_time_d = time.time() - starttime
-
-    return teacher_executiontime, execution_time_d, teacher_val_scores, student_val_scores, teacher_best_acc, best_test_acc, add_val_scores, add_acc, similarity_list_distill, endtime - starttime, direct_val_scores, distill_test_best_acc, old_val_scores, old_acc, similarity_list_direct, f_best_acc
-
+# def directresnet( directdataargs, directargs,de):
+#     device=de
+#     dataset_dir = lib.get_path(directdataargs['data']['path'])
+#     directdataset = TabularDataset(directdataargs, dataset_dir)
+#     directmodel = ResNet(
+#         d_numerical=0 if directdataset.X[0]['train'] is None else directdataset.X[0]['train'].shape[1],
+#         categories=lib.get_categories(directdataset.X[1]),
+#         d_out=directdataset.D.info['n_classes'] if directdataset.D.is_multiclass else 1,
+#         **directargs['model'],
+#     ).to(device)
+#     direct_execution_time,direct_val_scores,direct_best_acc=model_train(directmodel, directdataset, directargs,device)
+#
+#
+#     return direct_execution_time,direct_val_scores,direct_best_acc
 
 def ialresnet(teacherdataargs, teacherargs,ialdataargs,ialargs, de):
     device = de
@@ -1149,3 +1051,38 @@ def ialresnet(teacherdataargs, teacherargs,ialdataargs,ialargs, de):
     return inference_time, ial_val_scores, best_ial_acc, similarity_list_ial
             # student_output, student_lasthidden_output = directmodel(x_num, x_cat)
             # teacher_output, teacher_lasthidden_output = teachermodel(x_num_t, x_cat_t)
+#
+#         # 打印每个epoch的损失
+#         print(f"Epoch {epoch + 1}/{directargs['training']['n_epochs']}, Loss: {loss.item()}")
+#         similarity = compute_similarity(student_lasthidden_output, teacher_lasthidden_output)
+#         similarity_list.append(similarity)
+#         metrics, predictions = evaluate(directmodel, directdataset, directargs, [lib.VAL, lib.TEST], device)
+#         directmodel.train()
+#         # 保存val准确率
+#         #student_val_score = metrics['val']['score']
+#         direct_val_scores.append(metrics)
+#
+# #############old
+#         metrics_old, predictions_old = evaluate(directmodel, olddataset, directargs, [lib.VAL, lib.TEST], device)
+# ###################
+#         old_val_scores.append(metrics_old)
+#
+#
+#         # 早停判断
+#         if metrics['val']['score'] > best_acc:
+#             best_acc = metrics['val']['score']
+#             old_acc=metrics_old['val']['score']
+#             early_stopping_counter = 0
+#             # 保存最优模型
+#             print('Saving model')
+#             endtime = time.time()
+#             torch.save(directmodel.state_dict(), 'best_direct_model.pth')
+#         else:
+#             early_stopping_counter += 1
+#             if early_stopping_counter >= patience:
+#                 print("Early stopping triggered.")
+#                 # 绘制准确率曲线
+#
+#                 return endtime - starttime,direct_val_scores,best_acc,old_val_scores,old_acc,similarity_list
+#
+#     return  endtime - starttime, direct_val_scores, best_acc,old_val_scores,old_acc,similarity_list

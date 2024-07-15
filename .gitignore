@@ -1,1 +1,3 @@
-/experiment_output/*
+/experiment_output/**/**/*.json
+/experiment_output/**/**/*.txt
+!/experiment_output/**/**/*.png
